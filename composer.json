@@ -1,0 +1,38 @@
+{
+    "name": "stokoe/ai-gateway",
+    "autoload": {
+        "psr-4": {
+            "Stokoe\\AiGateway\\": "src"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Stokoe\\AiGateway\\Tests\\": "tests"
+        }
+    },
+    "require": {
+        "statamic/cms": "^6.0"
+    },
+    "require-dev": {
+        "orchestra/testbench": "^10.8",
+        "giorgiosironi/eris": "^1.1"
+    },
+    "config": {
+        "allow-plugins": {
+            "pixelfear/composer-dist-plugin": true
+        }
+    },
+    "extra": {
+        "statamic": {
+            "name": "Ai Gateway",
+            "description": "Ai Gateway addon"
+        },
+        "laravel": {
+            "providers": [
+                "Stokoe\\AiGateway\\ServiceProvider"
+            ]
+        }
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true
+}
