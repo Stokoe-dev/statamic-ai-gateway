@@ -27,7 +27,9 @@ class EnvelopeValidationPropertyTest extends TestCase
     {
         $validator = Validator::make($payload, [
             'tool'               => ['required', 'string'],
-            'arguments'          => ['required', 'array'],
+            // `present` instead of `required`: Laravel's `required` rejects empty arrays,
+            // but no-arg tools send `"arguments": {}` which decodes to `[]`.
+            'arguments'          => ['present', 'array'],
             'request_id'         => ['sometimes', 'string'],
             'idempotency_key'    => ['sometimes', 'string'],
             'confirmation_token' => ['sometimes', 'string'],

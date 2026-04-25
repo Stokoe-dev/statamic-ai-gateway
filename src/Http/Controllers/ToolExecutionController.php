@@ -50,7 +50,9 @@ class ToolExecutionController
 
             $envelopeValidator = Validator::make($payload, [
                 'tool'               => ['required', 'string'],
-                'arguments'          => ['required', 'array'],
+                // `present` instead of `required` because Laravel's `required`
+                // rejects empty arrays — which no-arg tools legitimately send.
+                'arguments'          => ['present', 'array'],
                 'request_id'         => ['sometimes', 'string'],
                 'idempotency_key'    => ['sometimes', 'string'],
                 'confirmation_token' => ['sometimes', 'string'],
