@@ -4,6 +4,10 @@ namespace Stokoe\AiGateway\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Statamic\Facades\User;
+use Statamic\Facades\Collection;
+use Statamic\Facades\GlobalSet;
+use Statamic\Facades\Nav;
+use Statamic\Facades\Taxonomy;
 use Statamic\Http\Controllers\CP\CpController;
 use Stokoe\AiGateway\Support\SettingsRepository;
 
@@ -78,5 +82,29 @@ class SettingsController extends CpController
         }
 
         return redirect()->back()->with('success', 'Settings saved successfully.');
+    }
+
+    public function resources()
+    {
+        abort_unless(User::current()?->isSuper(), 403);
+
+        return response()->json([
+            'collections' => Collection::all()->map(fn ($c) => [
+                'handle' => $c->handle(),
+                'title'  => $c->title(),
+            ])->values(),
+            'globals' => GlobalSet::all()->map(fn ($g) => [
+                'handle' => $g->handle(),
+                'title'  => $g->title(),
+            ])->values(),
+            'navigations' => Nav::all()->map(fn ($n) => [
+                'handle' => $n->handle(),
+                'title'  => $n->title(),
+            ])->values(),
+            'taxonomies' => Taxonomy::all()->map(fn ($t) => [
+                'handle' => $t->handle(),
+                'title'  => $t->title(),
+            ])->values(),
+        ]);
     }
 }

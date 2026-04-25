@@ -41,6 +41,12 @@ return [
         'cache' => [
             'clear' => env('AI_GATEWAY_TOOL_CACHE_CLEAR', false),
         ],
+        'stache' => [
+            'warm' => env('AI_GATEWAY_TOOL_STACHE_WARM', false),
+        ],
+        'static' => [
+            'warm' => env('AI_GATEWAY_TOOL_STATIC_WARM', false),
+        ],
     ],
 
     // Target allowlists — empty by default (nothing permitted)
@@ -63,6 +69,12 @@ return [
         'tools' => [
             'cache' => [
                 'clear' => ['production'],
+            ],
+            'stache' => [
+                'warm' => [],
+            ],
+            'static' => [
+                'warm' => [],
             ],
         ],
     ],

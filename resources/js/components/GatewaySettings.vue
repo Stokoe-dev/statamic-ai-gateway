@@ -7,6 +7,7 @@ const props = defineProps({
     maskedToken: String,
     logChannels: Array,
     updateUrl: String,
+    resourcesUrl: String,
     csrfToken: String,
     successMessage: String,
     errors: { type: Object, default: () => ({}) },
@@ -15,6 +16,14 @@ const props = defineProps({
 const dirty = ref(false);
 const saving = ref(false);
 const tokenRevealed = ref(false);
+const loadingResources = ref(true);
+
+const availableResources = reactive({
+    collections: [],
+    globals: [],
+    navigations: [],
+    taxonomies: [],
+});
 
 const form = reactive({
     enabled: props.settings.enabled ?? false,
@@ -52,6 +61,8 @@ const toolGroups = {
     navigation: ['get', 'update'],
     term: ['get', 'list', 'upsert'],
     cache: ['clear'],
+    stache: ['warm'],
+    static: ['warm'],
 };
 
 const cacheTargetOptions = ['application', 'static', 'stache', 'glide'];
@@ -64,13 +75,11 @@ const confirmationTools = [
     { label: 'navigation.update', group: 'navigation', action: 'update' },
     { label: 'term.upsert', group: 'term', action: 'upsert' },
     { label: 'cache.clear', group: 'cache', action: 'clear' },
+    { label: 'stache.warm', group: 'stache', action: 'warm' },
+    { label: 'static.warm', group: 'static', action: 'warm' },
 ];
 
 const tagInputs = reactive({
-    allowed_collections: '',
-    allowed_globals: '',
-    allowed_navigations: '',
-    allowed_taxonomies: '',
     'denied_fields.entry': '',
     'denied_fields.global': '',
     'denied_fields.term': '',
@@ -104,6 +113,16 @@ function generateToken() {
     markDirty();
 }
 
+function toggleAllowlistItem(listKey, handle) {
+    const idx = form[listKey].indexOf(handle);
+    if (idx >= 0) {
+        form[listKey].splice(idx, 1);
+    } else {
+        form[listKey].push(handle);
+    }
+    markDirty();
+}
+
 function addTag(listKey) {
     const val = tagInputs[listKey]?.trim();
     if (!val) return;
@@ -111,11 +130,6 @@ function addTag(listKey) {
         const [, type] = listKey.split('.');
         if (!form.denied_fields[type].includes(val)) {
             form.denied_fields[type].push(val);
-            markDirty();
-        }
-    } else {
-        if (!form[listKey].includes(val)) {
-            form[listKey].push(val);
             markDirty();
         }
     }
@@ -126,8 +140,6 @@ function removeTag(listKey, index) {
     if (listKey.startsWith('denied_fields.')) {
         const [, type] = listKey.split('.');
         form.denied_fields[type].splice(index, 1);
-    } else {
-        form[listKey].splice(index, 1);
     }
     markDirty();
 }
@@ -137,7 +149,7 @@ function getTagList(listKey) {
         const [, type] = listKey.split('.');
         return form.denied_fields[type];
     }
-    return form[listKey];
+    return [];
 }
 
 function toggleCacheTarget(target) {
@@ -157,6 +169,27 @@ function setConfirmationEnvs(group, action, value) {
     markDirty();
 }
 
+async function fetchResources() {
+    loadingResources.value = true;
+    try {
+        const response = await fetch(props.resourcesUrl, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        if (response.ok) {
+            const data = await response.json();
+            availableResources.collections = data.collections ?? [];
+            availableResources.globals = data.globals ?? [];
+            availableResources.navigations = data.navigations ?? [];
+            availableResources.taxonomies = data.taxonomies ?? [];
+        }
+    } catch (e) {
+        console.error('Failed to fetch resources:', e);
+    } finally {
+        loadingResources.value = false;
+    }
+}
+
 async function save() {
     saving.value = true;
     const payload = JSON.parse(JSON.stringify(form));
@@ -169,7 +202,6 @@ async function save() {
         }
     }
     try {
-        // Get XSRF token from cookie (Laravel's standard AJAX pattern)
         const xsrfToken = document.cookie.split('; ')
             .find(row => row.startsWith('XSRF-TOKEN='))
             ?.split('=')[1];
@@ -209,6 +241,7 @@ function beforeUnload(e) { if (dirty.value) e.preventDefault(); }
 onMounted(() => {
     window.addEventListener('beforeunload', beforeUnload);
     if (props.successMessage) Statamic.$toast.success(props.successMessage);
+    fetchResources();
 });
 onBeforeUnmount(() => { window.removeEventListener('beforeunload', beforeUnload); });
 </script>
@@ -289,31 +322,62 @@ onBeforeUnmount(() => { window.removeEventListener('beforeunload', beforeUnload)
             <Panel>
                 <PanelHeader>Allowlists</PanelHeader>
                 <div class="p-4 space-y-5">
-                    <div v-for="(label, key) in {
-                        allowed_collections: 'Collections',
-                        allowed_globals: 'Globals',
-                        allowed_navigations: 'Navigations',
-                        allowed_taxonomies: 'Taxonomies',
-                    }" :key="key">
-                        <Field :label="label">
-                            <div class="flex items-center gap-2 mb-2">
-                                <div class="flex-1">
-                                    <Input v-model="tagInputs[key]"
-                                        @keydown.enter.prevent="addTag(key)"
-                                        :placeholder="`Add ${label.toLowerCase()}...`" />
-                                </div>
-                                <Button size="sm" @click="addTag(key)">Add</Button>
-                            </div>
-                            <div class="flex flex-wrap gap-1.5">
-                                <span v-for="(item, i) in getTagList(key)" :key="i"
-                                    class="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-full px-3 py-1">
-                                    {{ item }}
-                                    <button type="button" @click="removeTag(key, i)"
-                                        class="text-gray-400 hover:text-red-500 ml-1">&times;</button>
-                                </span>
-                            </div>
-                        </Field>
-                    </div>
+
+                    <Field label="Collections">
+                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                        <div v-else-if="availableResources.collections.length === 0" class="text-sm text-gray-400">No collections found.</div>
+                        <div v-else class="space-y-1.5">
+                            <Checkbox
+                                v-for="item in availableResources.collections"
+                                :key="item.handle"
+                                :model-value="form.allowed_collections.includes(item.handle)"
+                                :label="`${item.title} (${item.handle})`"
+                                @update:model-value="toggleAllowlistItem('allowed_collections', item.handle)"
+                            />
+                        </div>
+                    </Field>
+
+                    <Field label="Globals">
+                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                        <div v-else-if="availableResources.globals.length === 0" class="text-sm text-gray-400">No global sets found.</div>
+                        <div v-else class="space-y-1.5">
+                            <Checkbox
+                                v-for="item in availableResources.globals"
+                                :key="item.handle"
+                                :model-value="form.allowed_globals.includes(item.handle)"
+                                :label="`${item.title} (${item.handle})`"
+                                @update:model-value="toggleAllowlistItem('allowed_globals', item.handle)"
+                            />
+                        </div>
+                    </Field>
+
+                    <Field label="Navigations">
+                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                        <div v-else-if="availableResources.navigations.length === 0" class="text-sm text-gray-400">No navigations found.</div>
+                        <div v-else class="space-y-1.5">
+                            <Checkbox
+                                v-for="item in availableResources.navigations"
+                                :key="item.handle"
+                                :model-value="form.allowed_navigations.includes(item.handle)"
+                                :label="`${item.title} (${item.handle})`"
+                                @update:model-value="toggleAllowlistItem('allowed_navigations', item.handle)"
+                            />
+                        </div>
+                    </Field>
+
+                    <Field label="Taxonomies">
+                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                        <div v-else-if="availableResources.taxonomies.length === 0" class="text-sm text-gray-400">No taxonomies found.</div>
+                        <div v-else class="space-y-1.5">
+                            <Checkbox
+                                v-for="item in availableResources.taxonomies"
+                                :key="item.handle"
+                                :model-value="form.allowed_taxonomies.includes(item.handle)"
+                                :label="`${item.title} (${item.handle})`"
+                                @update:model-value="toggleAllowlistItem('allowed_taxonomies', item.handle)"
+                            />
+                        </div>
+                    </Field>
 
                     <Field label="Cache Targets">
                         <div class="space-y-1.5">

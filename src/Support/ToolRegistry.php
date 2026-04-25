@@ -16,6 +16,8 @@ use Stokoe\AiGateway\Tools\GlobalGetTool;
 use Stokoe\AiGateway\Tools\GlobalUpdateTool;
 use Stokoe\AiGateway\Tools\NavigationGetTool;
 use Stokoe\AiGateway\Tools\NavigationUpdateTool;
+use Stokoe\AiGateway\Tools\StacheWarmTool;
+use Stokoe\AiGateway\Tools\StaticWarmTool;
 use Stokoe\AiGateway\Tools\TermGetTool;
 use Stokoe\AiGateway\Tools\TermListTool;
 use Stokoe\AiGateway\Tools\TermUpsertTool;
@@ -37,6 +39,8 @@ class ToolRegistry
         'term.list'          => TermListTool::class,
         'term.upsert'        => TermUpsertTool::class,
         'cache.clear'        => CacheClearTool::class,
+        'stache.warm'        => StacheWarmTool::class,
+        'static.warm'        => StaticWarmTool::class,
     ];
 
     protected Container $app;
