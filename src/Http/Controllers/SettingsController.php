@@ -67,6 +67,14 @@ class SettingsController extends CpController
 
         $repo = app(SettingsRepository::class);
 
+        // If token was not sent, preserve the existing one
+        if (! array_key_exists('token', $validated)) {
+            $existing = $repo->read();
+            if (isset($existing['token'])) {
+                $validated['token'] = $existing['token'];
+            }
+        }
+
         try {
             $repo->write($validated);
             $repo->applyToConfig();
