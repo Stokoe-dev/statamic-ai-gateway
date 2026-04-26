@@ -251,6 +251,26 @@ class ToolExecutionController
         ])->toJsonResponse();
     }
 
+    public function customCommands(Request $request): JsonResponse
+    {
+        $commands = config('ai_gateway.custom_commands', []);
+        $environment = app()->environment();
+
+        $result = array_map(function (array $command) use ($environment) {
+            $confirmationEnvs = $command['confirmation_environments'] ?? [];
+
+            return [
+                'alias'                 => $command['alias'],
+                'description'           => $command['description'] ?? '',
+                'requires_confirmation' => in_array($environment, $confirmationEnvs, true),
+            ];
+        }, $commands);
+
+        return ToolResponse::success('custom_commands', [
+            'commands' => array_values($result),
+        ])->toJsonResponse();
+    }
+
     private function buildErrorResponse(
         string $tool,
         string $code,

@@ -10,6 +10,7 @@ Route::prefix('ai-gateway')
     ->group(function () {
         Route::post('/execute', [ToolExecutionController::class, 'execute']);
         Route::get('/capabilities', [ToolExecutionController::class, 'capabilities']);
+        Route::get('/capabilities/custom-commands', [ToolExecutionController::class, 'customCommands']);
         Route::get('/capabilities/{tool}', [ToolExecutionController::class, 'toolUsage'])
             ->where('tool', '[a-z]+\.[a-z]+');
     });

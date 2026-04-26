@@ -40,13 +40,14 @@ A safe, structured interface between AI agents and your Statamic application.
   - [What Gets Logged](#what-gets-logged)
   - [What Never Gets Logged](#what-never-gets-logged)
 - [Tool Reference](#tool-reference)
-  - [`entry.create`](#entrycreate)
-  - [`entry.update`](#entryupdate)
-  - [`entry.upsert`](#entryupsert)
-  - [`global.update`](#globalupdate)
-  - [`navigation.update`](#navigationupdate)
-  - [`term.upsert`](#termupsert)
-  - [`cache.clear`](#cacheclear)
+  - [Content Tools](#content-tools)
+  - [Asset Tools](#asset-tools)
+  - [Blueprint Tools](#blueprint-tools)
+  - [Metadata & Discovery Tools](#metadata--discovery-tools)
+  - [Form Tools](#form-tools)
+  - [User Management Tools](#user-management-tools)
+  - [Custom Commands](#custom-commands)
+  - [System & Cache Tools](#system--cache-tools)
 - [Request / Response Contract](#request--response-contract)
   - [Request Envelope](#request-envelope)
   - [Success Response](#success-response)
@@ -83,9 +84,9 @@ A safe, structured interface between AI agents and your Statamic application.
 
 ## Overview
 
-AI Gateway is a Statamic v6 addon (`stokoe/ai-gateway`) that provides a controlled, authenticated HTTP tool execution interface for AI agents. The addon acts as a gateway layer between external AI systems and your Statamic/Laravel application, mediating all AI-initiated content mutations and operational actions through a strict pipeline of authentication, validation, authorization, tool resolution, execution, and audit logging.
+AI Gateway is a Statamic v6 addon (`stokoe/ai-gateway`) that provides a controlled, authenticated HTTP tool execution interface for AI agents. The addon acts as a gateway layer between external AI systems and your Statamic/Laravel application, mediating all AI-initiated content mutations, queries, and operational actions through a strict pipeline of authentication, validation, authorization, tool resolution, execution, and audit logging.
 
-Rather than exposing your application directly, this addon introduces a **tool-based execution layer**. AI agents can request actions such as creating content, updating globals, modifying navigation, or clearing caches — and the addon decides whether, how, and when those actions are allowed to happen.
+Rather than exposing your application directly, this addon introduces a **tool-based execution layer** with 41 tools across 15 capability areas. AI agents can request actions such as creating and searching content, managing assets and blueprints, reading form submissions, managing users, executing custom commands, and clearing caches — and the addon decides whether, how, and when those actions are allowed to happen.
 
 This makes it possible to bring AI-assisted workflows into Statamic without compromising stability, security, or developer control.
 
@@ -202,26 +203,47 @@ addons/stokoe/ai-gateway/
 │   ├── ServiceProvider.php
 │   ├── Http/
 │   │   ├── Controllers/
-│   │   │   └── ToolExecutionController.php
+│   │   │   ├── ToolExecutionController.php
+│   │   │   └── SettingsController.php
 │   │   └── Middleware/
 │   │       ├── AuthenticateGateway.php
 │   │       └── EnforceRateLimit.php
 │   ├── Tools/
 │   │   ├── Contracts/
 │   │   │   └── GatewayTool.php
-│   │   ├── EntryCreateTool.php
-│   │   ├── EntryUpdateTool.php
-│   │   ├── EntryUpsertTool.php
-│   │   ├── GlobalUpdateTool.php
-│   │   ├── NavigationUpdateTool.php
-│   │   ├── TermUpsertTool.php
-│   │   └── CacheClearTool.php
+│   │   ├── EntryCreateTool.php        EntryGetTool.php
+│   │   ├── EntryUpdateTool.php        EntryListTool.php
+│   │   ├── EntryUpsertTool.php        EntryDeleteTool.php
+│   │   ├── EntrySearchTool.php        EntryPublishTool.php
+│   │   ├── EntryUnpublishTool.php
+│   │   ├── GlobalGetTool.php          GlobalUpdateTool.php
+│   │   ├── NavigationGetTool.php      NavigationUpdateTool.php
+│   │   ├── NavigationListTool.php
+│   │   ├── TermGetTool.php            TermListTool.php
+│   │   ├── TermUpsertTool.php         TermDeleteTool.php
+│   │   ├── AssetUploadTool.php        AssetListTool.php
+│   │   ├── AssetGetTool.php           AssetDeleteTool.php
+│   │   ├── AssetMoveTool.php
+│   │   ├── BlueprintGetTool.php       BlueprintCreateTool.php
+│   │   ├── BlueprintUpdateTool.php    BlueprintDeleteTool.php
+│   │   ├── CollectionListTool.php
+│   │   ├── FormGetTool.php            FormListTool.php
+│   │   ├── FormSubmissionsTool.php
+│   │   ├── TaxonomyListTool.php       TaxonomyGetTool.php
+│   │   ├── SiteListTool.php           SystemInfoTool.php
+│   │   ├── UserListTool.php           UserGetTool.php
+│   │   ├── UserCreateTool.php         UserUpdateTool.php
+│   │   ├── UserDeleteTool.php
+│   │   ├── CustomCommandTool.php
+│   │   ├── CacheClearTool.php
+│   │   ├── StacheWarmTool.php         StaticWarmTool.php
 │   ├── Support/
 │   │   ├── ToolRegistry.php
 │   │   ├── ToolResponse.php
 │   │   ├── ConfirmationTokenManager.php
 │   │   ├── AuditLogger.php
-│   │   └── FieldFilter.php
+│   │   ├── FieldFilter.php
+│   │   └── SettingsRepository.php
 │   ├── Policies/
 │   │   └── ToolPolicy.php
 │   └── Exceptions/
@@ -235,7 +257,7 @@ addons/stokoe/ai-gateway/
 │   └── api.php
 └── tests/
     ├── TestCase.php
-    ├── Property/          (11 property-based tests)
+    ├── Property/          (26 property-based tests)
     ├── Unit/              (addon lifecycle tests)
     └── Integration/       (full pipeline tests)
 ```
@@ -319,10 +341,13 @@ The settings panel covers every configuration option:
 - **General** — Master enable/disable toggle and bearer token management (masked display, reveal, and one-click generation of cryptographically random 64-character hex tokens)
 - **Rate Limits** — Requests per minute for the execute and capabilities endpoints
 - **Request Limits** — Maximum request body size in bytes
-- **Tools** — Individual enable/disable toggles for all 13 tools, grouped by type (entry, global, navigation, term, cache)
-- **Allowlists** — Tag-input editors for collections, globals, navigations, and taxonomies, plus checkboxes for cache targets
+- **Tools** — Individual enable/disable toggles for all 41 tools, grouped by type (entry, global, navigation, term, cache, asset, blueprint, collection, form, site, user, system, custom command, taxonomy)
+- **Allowlists** — Checkbox editors for collections, globals, navigations, taxonomies, asset containers, forms, and cache targets
+- **User Management** — Master toggle for all user tools (`allowed_user_operations`)
+- **Asset Upload Settings** — Max asset size and allowed file extensions
+- **Custom Commands** — Add, edit, and remove custom artisan command definitions with alias, description, command string, and confirmation environments
 - **Field Deny Lists** — Tag-input editors for entry, global, and term denied fields
-- **Confirmation Flow** — Token TTL and per-tool environment rules (e.g. require confirmation for `cache.clear` in production)
+- **Confirmation Flow** — Token TTL and per-tool environment rules for all destructive tools
 - **Audit** — Log channel selection from your configured Laravel log channels
 
 ### How Settings Persistence Works
@@ -359,12 +384,14 @@ The merge happens at boot time via `SettingsRepository::applyToConfig()`, which 
 
 Once enabled, two routes are available:
 
-| Method | Path                       | Purpose                              |
-|--------|----------------------------|--------------------------------------|
-| POST   | `/ai-gateway/execute`      | Execute a tool                       |
-| GET    | `/ai-gateway/capabilities` | Discover available tools and config  |
+| Method | Path                                        | Purpose                              |
+|--------|---------------------------------------------|--------------------------------------|
+| POST   | `/ai-gateway/execute`                       | Execute a tool                       |
+| GET    | `/ai-gateway/capabilities`                  | Discover available tools and config  |
+| GET    | `/ai-gateway/capabilities/custom-commands`  | Discover custom command definitions  |
+| GET    | `/ai-gateway/capabilities/{tool}`           | Get usage info for a specific tool   |
 
-Both require the `Authorization: Bearer <token>` header. Both pass through `AuthenticateGateway` and `EnforceRateLimit` middleware.
+All require the `Authorization: Bearer <token>` header. All pass through `AuthenticateGateway` and `EnforceRateLimit` middleware.
 
 ---
 
@@ -393,21 +420,44 @@ return [
 
     // Tool enablement — all disabled by default
     'tools' => [
-        'entry.create'       => env('AI_GATEWAY_TOOL_ENTRY_CREATE', false),
-        'entry.update'       => env('AI_GATEWAY_TOOL_ENTRY_UPDATE', false),
-        'entry.upsert'       => env('AI_GATEWAY_TOOL_ENTRY_UPSERT', false),
-        'global.update'      => env('AI_GATEWAY_TOOL_GLOBAL_UPDATE', false),
-        'navigation.update'  => env('AI_GATEWAY_TOOL_NAVIGATION_UPDATE', false),
-        'term.upsert'        => env('AI_GATEWAY_TOOL_TERM_UPSERT', false),
-        'cache.clear'        => env('AI_GATEWAY_TOOL_CACHE_CLEAR', false),
+        'entry'          => ['get', 'list', 'create', 'update', 'upsert', 'delete', 'search', 'publish', 'unpublish'],
+        'global'         => ['get', 'update'],
+        'navigation'     => ['get', 'update', 'list'],
+        'term'           => ['get', 'list', 'upsert', 'delete'],
+        'cache'          => ['clear'],
+        'stache'         => ['warm'],
+        'static'         => ['warm'],
+        'asset'          => ['upload', 'list', 'get', 'delete', 'move'],
+        'blueprint'      => ['get', 'create', 'update', 'delete'],
+        'collection'     => ['list'],
+        'form'           => ['get', 'list', 'submissions'],
+        'site'           => ['list'],
+        'custom_command'  => ['execute'],
+        'taxonomy'       => ['list', 'get'],
+        'user'           => ['list', 'get', 'create', 'update', 'delete'],
+        'system'         => ['info'],
     ],
 
     // Target allowlists — empty by default (nothing permitted)
-    'allowed_collections'   => [],
-    'allowed_globals'       => [],
-    'allowed_navigations'   => [],
-    'allowed_taxonomies'    => [],
-    'allowed_cache_targets' => [],
+    'allowed_collections'       => [],
+    'allowed_globals'           => [],
+    'allowed_navigations'       => [],
+    'allowed_taxonomies'        => [],
+    'allowed_cache_targets'     => [],
+    'allowed_asset_containers'  => [],
+    'allowed_forms'             => [],
+    'allowed_custom_commands'   => [],
+
+    // User management — toggle-based (not per-resource allowlist)
+    'allowed_user_operations' => false,
+
+    // Asset upload constraints
+    'max_asset_size' => env('AI_GATEWAY_MAX_ASSET_SIZE', 10485760), // 10MB
+    'allowed_asset_extensions' => [
+        'jpg', 'jpeg', 'png', 'gif', 'webp', 'svg',
+        'pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv',
+        'txt', 'md', 'mp4', 'webm', 'mp3',
+    ],
 
     // Field-level deny lists per target type
     'denied_fields' => [
@@ -418,16 +468,24 @@ return [
 
     // Confirmation flow
     'confirmation' => [
-        'ttl'   => env('AI_GATEWAY_CONFIRMATION_TTL', 60), // seconds
+        'ttl'   => env('AI_GATEWAY_CONFIRMATION_TTL', 60),
         'tools' => [
-            'cache.clear' => ['production'],
+            'cache'     => ['clear' => ['production']],
+            'entry'     => ['delete' => ['production'], 'unpublish' => ['production']],
+            'term'      => ['delete' => ['production']],
+            'asset'     => ['upload' => ['production'], 'delete' => ['production'], 'move' => ['production']],
+            'blueprint' => ['delete' => ['production']],
+            'user'      => ['create' => ['production'], 'delete' => ['production']],
         ],
     ],
 
     // Audit logging
     'audit' => [
-        'channel' => env('AI_GATEWAY_LOG_CHANNEL', null), // null = default channel
+        'channel' => env('AI_GATEWAY_LOG_CHANNEL', null),
     ],
+
+    // Custom commands (populated via CP settings)
+    'custom_commands' => [],
 ];
 ```
 
@@ -440,15 +498,11 @@ return [
 | `AI_GATEWAY_MAX_REQUEST_SIZE`      | `65536`  | Max request body in bytes                      |
 | `AI_GATEWAY_RATE_LIMIT_EXECUTE`    | `30`     | Requests/min for execute endpoint              |
 | `AI_GATEWAY_RATE_LIMIT_CAPABILITIES`| `60`    | Requests/min for capabilities endpoint         |
-| `AI_GATEWAY_TOOL_ENTRY_CREATE`     | `false`  | Enable entry.create tool                       |
-| `AI_GATEWAY_TOOL_ENTRY_UPDATE`     | `false`  | Enable entry.update tool                       |
-| `AI_GATEWAY_TOOL_ENTRY_UPSERT`    | `false`  | Enable entry.upsert tool                       |
-| `AI_GATEWAY_TOOL_GLOBAL_UPDATE`    | `false`  | Enable global.update tool                      |
-| `AI_GATEWAY_TOOL_NAVIGATION_UPDATE`| `false`  | Enable navigation.update tool                  |
-| `AI_GATEWAY_TOOL_TERM_UPSERT`     | `false`  | Enable term.upsert tool                        |
-| `AI_GATEWAY_TOOL_CACHE_CLEAR`     | `false`  | Enable cache.clear tool                        |
+| `AI_GATEWAY_MAX_ASSET_SIZE`        | `10485760` | Max asset upload size in bytes (10MB)        |
 | `AI_GATEWAY_CONFIRMATION_TTL`     | `60`     | Confirmation token lifetime in seconds         |
 | `AI_GATEWAY_LOG_CHANNEL`          | `null`   | Laravel log channel for audit (null = default) |
+
+Every tool has a corresponding `AI_GATEWAY_TOOL_{GROUP}_{ACTION}` env variable (e.g. `AI_GATEWAY_TOOL_ENTRY_CREATE`, `AI_GATEWAY_TOOL_ASSET_UPLOAD`), all defaulting to `false`.
 
 ---
 
@@ -462,13 +516,20 @@ The addon enforces a **default-deny** security model with three layers:
 
 **Layer 2 — Target-level:** Even with a tool enabled, it can only operate on explicitly allowed targets. The `ToolPolicy` maps each tool's target type to its corresponding allowlist:
 
-| Tool target type | Config key                      |
-|------------------|---------------------------------|
-| `entry`          | `ai_gateway.allowed_collections`|
-| `global`         | `ai_gateway.allowed_globals`    |
-| `navigation`     | `ai_gateway.allowed_navigations`|
-| `taxonomy`       | `ai_gateway.allowed_taxonomies` |
-| `cache`          | `ai_gateway.allowed_cache_targets`|
+| Tool target type  | Config key                             | Notes                                    |
+|-------------------|----------------------------------------|------------------------------------------|
+| `entry`           | `ai_gateway.allowed_collections`       |                                          |
+| `global`          | `ai_gateway.allowed_globals`           |                                          |
+| `navigation`      | `ai_gateway.allowed_navigations`       |                                          |
+| `taxonomy`        | `ai_gateway.allowed_taxonomies`        |                                          |
+| `cache`           | `ai_gateway.allowed_cache_targets`     |                                          |
+| `asset`           | `ai_gateway.allowed_asset_containers`  |                                          |
+| `form`            | `ai_gateway.allowed_forms`             |                                          |
+| `custom_command`  | `ai_gateway.allowed_custom_commands`   |                                          |
+| `user`            | `ai_gateway.allowed_user_operations`   | Boolean toggle, not per-resource list    |
+| `site`            | —                                      | No allowlist (all sites returned)        |
+| `system`          | —                                      | No allowlist (tool-level toggle only)    |
+| `blueprint`       | Delegates to resource-type allowlist   | Checks collection/global/taxonomy list   |
 
 A request targeting something not in the allowlist returns `403 forbidden`.
 
@@ -526,16 +587,23 @@ Oversized requests are rejected with `422 validation_failed` before any processi
 
 ## Confirmation Flow
 
-Sensitive operations can require a two-step confirmation in specific environments. By default, `cache.clear` requires confirmation in production:
+Sensitive operations can require a two-step confirmation in specific environments. By default, several destructive tools require confirmation in production:
 
 ```php
 'confirmation' => [
     'ttl'   => env('AI_GATEWAY_CONFIRMATION_TTL', 60),
     'tools' => [
-        'cache.clear' => ['production'],
+        'cache'     => ['clear' => ['production']],
+        'entry'     => ['delete' => ['production'], 'unpublish' => ['production']],
+        'term'      => ['delete' => ['production']],
+        'asset'     => ['upload' => ['production'], 'delete' => ['production'], 'move' => ['production']],
+        'blueprint' => ['delete' => ['production']],
+        'user'      => ['create' => ['production'], 'delete' => ['production']],
     ],
 ],
 ```
+
+Custom commands can also define per-command confirmation environments.
 
 ### How It Works
 
@@ -606,7 +674,7 @@ Each log entry (written as `ai_gateway.audit` via `Log::info()`) includes:
 | `tool`              | Tool name that was invoked                     |
 | `status`            | `succeeded`, `failed`, or `rejected`           |
 | `http_status`       | HTTP status code of the response               |
-| `target_type`       | `entry`, `global`, `navigation`, `taxonomy`, `cache` |
+| `target_type`       | `entry`, `global`, `navigation`, `taxonomy`, `cache`, `asset`, `form`, `user`, `site`, `system`, `blueprint`, `custom_command` |
 | `target_identifier` | The specific target (e.g. collection handle)   |
 | `environment`       | Application environment                        |
 | `duration_ms`       | Request processing time in milliseconds        |
@@ -625,7 +693,11 @@ The `AuditLogger` explicitly strips these sensitive keys:
 
 ## Tool Reference
 
-### `entry.create`
+The addon provides 41 tools across 15 groups. All tools are disabled by default and must be explicitly enabled.
+
+### Content Tools
+
+#### `entry.create`
 
 Creates a new entry in a collection. Returns `409 conflict` if the entry already exists.
 
@@ -650,24 +722,72 @@ Creates a new entry in a collection. Returns `409 conflict` if the entry already
 | `published`  | no       | boolean |             | Publish state of the entry             |
 | `site`       | no       | string  | `"default"` | For multi-site setups                  |
 
-- Checks collection exists via `Collection::findByHandle()` → `404 resource_not_found`
-- Checks entry doesn't already exist → `409 conflict`
-- Validates `data` against the collection's blueprint when available
-- Creates via `Entry::make()`
+#### `entry.update`
 
-### `entry.update`
+Updates an existing entry. Merges the provided `data` onto the existing entry — only the fields you send are changed. Returns `404 resource_not_found` if the entry doesn't exist. Same arguments as `entry.create`.
 
-Updates an existing entry. Merges the provided `data` onto the existing entry — only the fields you send are changed, everything else is preserved.
+#### `entry.upsert`
 
-Same arguments as `entry.create`. Returns `404 resource_not_found` if the entry doesn't exist.
+Creates the entry if it doesn't exist, updates it if it does. Returns `status: "created"` or `status: "updated"`. Same arguments as `entry.create`. This is the safest choice for most content operations.
 
-### `entry.upsert`
+#### `entry.get`
 
-Creates the entry if it doesn't exist, updates it if it does. Returns `status: "created"` or `status: "updated"`. Same arguments as `entry.create`.
+Retrieves a single entry by collection, slug, and optional site. Returns the entry's ID, slug, published state, and data fields (with denied fields stripped).
 
-This is the safest choice for most content operations — no need to check existence first, no risk of `conflict` errors.
+#### `entry.list`
 
-### `global.update`
+Lists entries in a collection with pagination. Supports `limit` (1–100, default 25) and `offset` (min 0, default 0).
+
+#### `entry.delete`
+
+Deletes an entry from a collection. Confirmation-gated in production by default.
+
+```json
+{
+    "tool": "entry.delete",
+    "arguments": { "collection": "pages", "slug": "old-page", "site": "default" }
+}
+```
+
+#### `entry.search`
+
+Searches entries by field values or title substring.
+
+```json
+{
+    "tool": "entry.search",
+    "arguments": {
+        "collection": "articles",
+        "filter": { "author": "John", "category": "news" },
+        "query": "search term",
+        "limit": 25,
+        "offset": 0,
+        "site": "default"
+    }
+}
+```
+
+| Argument     | Required | Type    | Default     | Notes                                      |
+|-------------|----------|---------|-------------|---------------------------------------------|
+| `collection` | yes      | string  |             | Must be in `allowed_collections`            |
+| `filter`     | no       | object  |             | Field-value pairs for exact matching        |
+| `query`      | no       | string  |             | Case-insensitive title substring search     |
+| `limit`      | no       | integer | `25`        | 1–100                                       |
+| `offset`     | no       | integer | `0`         | Min 0                                       |
+| `site`       | no       | string  | `"default"` | For multi-site setups                       |
+
+#### `entry.publish` / `entry.unpublish`
+
+Set an entry's published state to true or false as distinct editorial workflow actions, separate from data updates. `entry.unpublish` is confirmation-gated in production by default.
+
+```json
+{
+    "tool": "entry.publish",
+    "arguments": { "collection": "articles", "slug": "my-draft" }
+}
+```
+
+#### `global.update`
 
 Updates a global variable set's localized values for a given site.
 
@@ -682,18 +802,9 @@ Updates a global variable set's localized values for a given site.
 }
 ```
 
-| Argument | Required | Type   | Default     | Notes                            |
-|----------|----------|--------|-------------|----------------------------------|
-| `handle` | yes      | string |             | Must be in `allowed_globals`     |
-| `data`   | yes      | object |             | Field values as key-value pairs  |
-| `site`   | no       | string | `"default"` | For multi-site setups            |
+#### `navigation.update`
 
-- Finds global set via `GlobalSet::findByHandle()` → `404 resource_not_found`
-- Gets or creates localized variables for the site
-
-### `navigation.update`
-
-Replaces an entire navigation tree. This is a **full replacement** — the existing tree is discarded entirely.
+Replaces an entire navigation tree. This is a full replacement — the existing tree is discarded.
 
 ```json
 {
@@ -703,66 +814,292 @@ Replaces an entire navigation tree. This is a **full replacement** — the exist
         "site": "default",
         "tree": [
             { "url": "/", "title": "Home" },
-            { "url": "/about", "title": "About" },
-            { "url": "/contact", "title": "Contact" }
+            { "url": "/about", "title": "About" }
         ]
     }
 }
 ```
 
-| Argument | Required | Type   | Default     | Notes                              |
-|----------|----------|--------|-------------|------------------------------------|
-| `handle` | yes      | string |             | Must be in `allowed_navigations`   |
-| `tree`   | yes      | array  |             | Complete navigation structure       |
-| `site`   | no       | string | `"default"` | For multi-site setups              |
-
-- Finds navigation via `Nav::findByHandle()` → `404 resource_not_found`
-- Always send the complete tree — partial patches are not supported
-
-### `term.upsert`
+#### `term.upsert`
 
 Creates or updates a taxonomy term.
 
 ```json
 {
     "tool": "term.upsert",
+    "arguments": { "taxonomy": "tags", "slug": "laravel", "data": { "title": "Laravel" } }
+}
+```
+
+#### `term.delete`
+
+Deletes a taxonomy term. Confirmation-gated in production by default.
+
+```json
+{
+    "tool": "term.delete",
+    "arguments": { "taxonomy": "tags", "slug": "old-tag" }
+}
+```
+
+### Asset Tools
+
+All asset tools use the `allowed_asset_containers` allowlist.
+
+#### `asset.upload`
+
+Uploads a base64-encoded file to an asset container. Validates file size against `max_asset_size` and extension against `allowed_asset_extensions`. Confirmation-gated in production.
+
+```json
+{
+    "tool": "asset.upload",
     "arguments": {
-        "taxonomy": "tags",
-        "slug": "laravel",
-        "site": "default",
-        "data": { "title": "Laravel" }
+        "container": "assets",
+        "path": "images/hero.jpg",
+        "file": "<base64-encoded-content>",
+        "alt": "Hero image"
     }
 }
 ```
 
-| Argument   | Required | Type   | Default     | Notes                              |
-|-----------|----------|--------|-------------|------------------------------------|
-| `taxonomy` | yes      | string |             | Must be in `allowed_taxonomies`    |
-| `slug`     | yes      | string |             | Term identifier                    |
-| `data`     | yes      | object |             | Field values as key-value pairs    |
-| `site`     | no       | string | `"default"` | For multi-site setups              |
+| Argument    | Required | Type   | Notes                                          |
+|------------|----------|--------|-------------------------------------------------|
+| `container` | yes      | string | Must be in `allowed_asset_containers`           |
+| `path`      | yes      | string | Destination path within the container           |
+| `file`      | yes      | string | Base64-encoded file content                     |
+| `alt`       | no       | string | Alt text for the asset                          |
 
-- Finds taxonomy via `Taxonomy::findByHandle()` → `404 resource_not_found`
-- Returns `status: "created"` or `status: "updated"`
+#### `asset.list`
 
-### `cache.clear`
+Lists assets in a container with optional path prefix filtering and pagination.
+
+```json
+{
+    "tool": "asset.list",
+    "arguments": { "container": "assets", "path": "images/", "limit": 25, "offset": 0 }
+}
+```
+
+#### `asset.get`
+
+Retrieves a single asset's metadata including ID, path, URL, size, last-modified, alt text, MIME type, and image dimensions (width/height) when the asset is an image.
+
+```json
+{
+    "tool": "asset.get",
+    "arguments": { "container": "assets", "path": "images/hero.jpg" }
+}
+```
+
+#### `asset.delete`
+
+Deletes an asset from a container. Confirmation-gated in production.
+
+#### `asset.move`
+
+Moves an asset within or between containers. Both source and destination containers are checked against the allowlist. Returns `409 conflict` if the destination already exists. Confirmation-gated in production.
+
+```json
+{
+    "tool": "asset.move",
+    "arguments": {
+        "source_container": "assets",
+        "source_path": "images/old-hero.jpg",
+        "destination_path": "images/archive/old-hero.jpg",
+        "destination_container": "archive"
+    }
+}
+```
+
+### Blueprint Tools
+
+Blueprint tools accept a `resource_type` (`collection`, `global`, or `taxonomy`) and authorize against the corresponding resource-type allowlist (e.g. collection handle checked against `allowed_collections`).
+
+#### `blueprint.get`
+
+Retrieves the field schema of a blueprint with each field's handle, display name, type, validation rules, and required flag. Denied fields are stripped from the response.
+
+```json
+{
+    "tool": "blueprint.get",
+    "arguments": { "resource_type": "collection", "handle": "pages" }
+}
+```
+
+#### `blueprint.create`
+
+Creates a new blueprint. Field types are validated against Statamic's known fieldtypes.
+
+```json
+{
+    "tool": "blueprint.create",
+    "arguments": {
+        "resource_type": "collection",
+        "handle": "pages",
+        "fields": [
+            { "handle": "title", "type": "text", "display": "Title", "required": true },
+            { "handle": "content", "type": "bard", "display": "Content" }
+        ]
+    }
+}
+```
+
+#### `blueprint.update`
+
+Merges or replaces field definitions in an existing blueprint. Existing fields with matching handles are replaced; new fields are appended.
+
+#### `blueprint.delete`
+
+Deletes a blueprint. Confirmation-gated in production.
+
+### Metadata & Discovery Tools
+
+#### `collection.list`
+
+Lists collections in the `allowed_collections` allowlist with handle, title, route, structure config, and taxonomy handles. Supports an optional `handle` argument for single-collection metadata.
+
+```json
+{
+    "tool": "collection.list",
+    "arguments": {}
+}
+```
+
+#### `taxonomy.list`
+
+Lists taxonomies in the `allowed_taxonomies` allowlist with handle, title, and term count.
+
+#### `taxonomy.get`
+
+Retrieves a taxonomy's handle, title, route pattern, attached collection handles, and blueprint info.
+
+#### `navigation.list`
+
+Lists navigations in the `allowed_navigations` allowlist with handle, title, and max depth.
+
+#### `site.list`
+
+Returns all configured Statamic sites with handle, name, locale, and URL. No allowlist — all sites are returned. Read-only, no confirmation.
+
+#### `system.info`
+
+Returns Statamic version, Laravel version, PHP version, environment name, and addon version. No allowlist — tool-level toggle only. Read-only, no confirmation.
+
+### Form Tools
+
+All form tools use the `allowed_forms` allowlist.
+
+#### `form.get`
+
+Retrieves a form's handle, title, fields configuration, and submission count.
+
+```json
+{
+    "tool": "form.get",
+    "arguments": { "handle": "contact" }
+}
+```
+
+#### `form.list`
+
+Lists all forms in the `allowed_forms` allowlist with handle, title, and submission count.
+
+#### `form.submissions`
+
+Returns a paginated list of form submissions with ID, date, and field data. Supports `limit` (1–100, default 25) and `offset` (min 0, default 0).
+
+### User Management Tools
+
+All user tools are gated by the `allowed_user_operations` boolean toggle. When disabled, all user tools return `403 forbidden`.
+
+#### `user.list`
+
+Returns a paginated list of users with ID, name, email, roles, and super-admin status.
+
+#### `user.get`
+
+Retrieves a user by `id` or `email`. At least one must be provided.
+
+```json
+{
+    "tool": "user.get",
+    "arguments": { "email": "john@example.com" }
+}
+```
+
+#### `user.create`
+
+Creates a new user. Confirmation-gated in production.
+
+```json
+{
+    "tool": "user.create",
+    "arguments": {
+        "email": "jane@example.com",
+        "name": "Jane Doe",
+        "password": "secure-password",
+        "roles": ["editor"]
+    }
+}
+```
+
+#### `user.update`
+
+Updates a user by `id` or `email`. Requires confirmation when the `password` field is present and the environment is in the confirmation list.
+
+#### `user.delete`
+
+Deletes a user by `id` or `email`. Confirmation-gated in production.
+
+### Custom Commands
+
+Operator-defined artisan commands that AI agents can discover and execute through the Gateway.
+
+#### Defining Commands
+
+Custom commands are defined in the CP settings panel. Each command has:
+- **Alias** — kebab-case identifier (e.g. `rebuild-search`)
+- **Description** — human-readable description
+- **Command** — the artisan command string (e.g. `statamic:search:update --all`)
+- **Confirmation environments** — optional list of environments requiring confirmation
+
+Commands can also be defined in `settings.yaml`:
+
+```yaml
+custom_commands:
+  - alias: "rebuild-search"
+    description: "Rebuild the search index"
+    command: "statamic:search:update --all"
+    confirmation_environments: ["production"]
+```
+
+#### `custom_command.execute`
+
+Executes a custom command by alias. Returns `resource_not_found` for unknown aliases, `execution_failed` for non-zero exit codes.
+
+```json
+{
+    "tool": "custom_command.execute",
+    "arguments": { "alias": "rebuild-search" }
+}
+```
+
+#### Discovery Endpoint
+
+`GET /ai-gateway/capabilities/custom-commands` returns all enabled custom command definitions with alias, description, and confirmation status.
+
+### System & Cache Tools
+
+#### `cache.clear`
 
 Clears a specific cache target. Confirmation-gated in production by default.
 
 ```json
 {
     "tool": "cache.clear",
-    "arguments": {
-        "target": "stache"
-    }
+    "arguments": { "target": "stache" }
 }
 ```
-
-| Argument | Required | Type   | Allowed values                              |
-|----------|----------|--------|---------------------------------------------|
-| `target` | yes      | string | `application`, `static`, `stache`, `glide`  |
-
-Each target maps to an Artisan command:
 
 | Target        | Artisan command                |
 |---------------|--------------------------------|
@@ -771,8 +1108,9 @@ Each target maps to an Artisan command:
 | `stache`      | `statamic:stache:clear`        |
 | `glide`       | `statamic:glide:clear`         |
 
-- `requiresConfirmation()` checks `config('ai_gateway.confirmation.tools.cache.clear')` for the current environment
-- Must be in `allowed_cache_targets`
+#### `stache.warm` / `static.warm`
+
+Warms the Stache or static cache respectively.
 
 ---
 
@@ -855,11 +1193,11 @@ Every request to `POST /ai-gateway/execute` uses the same envelope:
 | `tool_not_found`       | 404  | Tool name not registered                       |
 | `tool_disabled`        | 403  | Tool exists but is not enabled                 |
 | `validation_failed`    | 422  | Bad request envelope or tool arguments         |
-| `resource_not_found`   | 404  | Collection, entry, global, etc. doesn't exist  |
-| `conflict`             | 409  | Entry already exists (`entry.create` only)     |
+| `resource_not_found`   | 404  | Collection, entry, asset, user, etc. doesn't exist |
+| `conflict`             | 409  | Resource already exists (create / asset move)  |
 | `rate_limited`         | 429  | Too many requests                              |
 | `confirmation_required`| 200  | Confirmation token issued, re-send to confirm  |
-| `execution_failed`     | 500  | Tool threw an unexpected error                 |
+| `execution_failed`     | 500  | Tool or custom command execution failed        |
 | `internal_error`       | 500  | Unhandled server error (production only)       |
 
 ### Exception Mapping
@@ -888,20 +1226,30 @@ Call `GET /ai-gateway/capabilities` to see what's available:
     "tool": "capabilities",
     "result": {
         "capabilities": {
-            "entry.create":      { "enabled": true,  "target_type": "entry",      "requires_confirmation": false },
-            "entry.update":      { "enabled": true,  "target_type": "entry",      "requires_confirmation": false },
-            "entry.upsert":      { "enabled": false, "target_type": "entry",      "requires_confirmation": false },
-            "global.update":     { "enabled": false, "target_type": "global",     "requires_confirmation": false },
-            "navigation.update": { "enabled": false, "target_type": "navigation", "requires_confirmation": false },
-            "term.upsert":       { "enabled": false, "target_type": "taxonomy",   "requires_confirmation": false },
-            "cache.clear":       { "enabled": true,  "target_type": "cache",      "requires_confirmation": true  }
+            "entry.create":          { "enabled": true,  "target_type": "entry",          "requires_confirmation": false },
+            "entry.update":          { "enabled": true,  "target_type": "entry",          "requires_confirmation": false },
+            "entry.upsert":          { "enabled": false, "target_type": "entry",          "requires_confirmation": false },
+            "entry.delete":          { "enabled": false, "target_type": "entry",          "requires_confirmation": true  },
+            "entry.search":          { "enabled": true,  "target_type": "entry",          "requires_confirmation": false },
+            "entry.publish":         { "enabled": false, "target_type": "entry",          "requires_confirmation": false },
+            "asset.upload":          { "enabled": true,  "target_type": "asset",          "requires_confirmation": true  },
+            "asset.list":            { "enabled": true,  "target_type": "asset",          "requires_confirmation": false },
+            "blueprint.get":         { "enabled": true,  "target_type": "blueprint",      "requires_confirmation": false },
+            "collection.list":       { "enabled": true,  "target_type": "entry",          "requires_confirmation": false },
+            "form.list":             { "enabled": false, "target_type": "form",           "requires_confirmation": false },
+            "user.list":             { "enabled": false, "target_type": "user",           "requires_confirmation": false },
+            "custom_command.execute": { "enabled": false, "target_type": "custom_command", "requires_confirmation": false },
+            "system.info":           { "enabled": true,  "target_type": "system",         "requires_confirmation": false },
+            "cache.clear":           { "enabled": true,  "target_type": "cache",          "requires_confirmation": true  }
         }
     },
     "meta": {}
 }
 ```
 
-This endpoint reads all registered tools from the `ToolRegistry`, instantiates each handler, and returns its enabled status, target type, and whether it requires confirmation in the current environment.
+This endpoint reads all 41 registered tools from the `ToolRegistry`, instantiates each handler, and returns its enabled status, target type, and whether it requires confirmation in the current environment.
+
+For custom commands specifically, call `GET /ai-gateway/capabilities/custom-commands` to discover available command definitions with alias, description, and confirmation status.
 
 ---
 
@@ -964,11 +1312,11 @@ All produce a `JsonResponse` via `toJsonResponse()` with the correct envelope st
 
 ## Testing
 
-The addon has 81 tests with 11,500+ assertions across three categories:
+The addon has 178 tests with 23,600+ assertions across three categories:
 
 ### Property-Based Tests (Eris)
 
-11 correctness properties validated with 100+ random iterations each:
+26 correctness properties validated with 100+ random iterations each:
 
 1. **Token comparison correctness** — `hash_equals` returns true iff tokens match
 2. **Request envelope validation** — accepts valid envelopes, rejects malformed ones
@@ -981,6 +1329,21 @@ The addon has 81 tests with 11,500+ assertions across three categories:
 9. **Confirmation token binding** — token for one (tool, args) pair fails for another
 10. **Response envelope consistency** — success/error/confirmation all have correct structure
 11. **Audit log completeness and safety** — required fields present, sensitive data absent
+12. **Asset size validation** — oversized payloads rejected, within-limit payloads accepted
+13. **Asset extension validation** — disallowed extensions rejected, case-insensitive matching
+14. **Asset list prefix filtering** — path prefix returns only matching assets, excludes none
+15. **Asset move dual-container auth** — both source and destination containers checked
+16. **Blueprint allowlist delegation** — correct allowlist checked per resource type
+17. **Blueprint fieldtype validation** — unrecognized fieldtypes rejected with listing
+18. **List tools allowlist filtering** — only allowlisted resources returned, none excluded
+19. **Entry search filter matching** — returned entries match all filter criteria
+20. **Entry search query matching** — returned entries contain query as title substring
+21. **Custom command dynamic confirmation** — confirmation iff environment in command's list
+22. **Custom command alias validation** — kebab-case, non-empty, unique aliases enforced
+23. **Custom command settings round-trip** — write/read preserves definitions
+24. **Tool registry expansion** — all 41 registered tools resolve to GatewayTool instances
+25. **User tools toggle gating** — all user tools gated by operations toggle
+26. **User update password confirmation** — confirmation iff password present and environment in list
 
 ### Unit Tests
 
@@ -993,12 +1356,18 @@ Full HTTP pipeline tests covering:
 
 - Authentication (missing/invalid/valid tokens, capabilities auth)
 - Rate limiting (within limit, exceeding limit, separate buckets)
-- Entry tools (create, duplicate conflict, update, upsert create/update paths, disallowed collection, nonexistent collection, request_id round-trip)
+- Entry tools (create, duplicate conflict, update, upsert create/update paths, delete, search, publish/unpublish, disallowed collection, nonexistent collection, request_id round-trip)
 - Global tools (update existing, nonexistent global)
 - Navigation tools (update existing, nonexistent navigation)
-- Term tools (upsert create, upsert update, nonexistent taxonomy)
+- Term tools (upsert create, upsert update, delete, nonexistent taxonomy, non-allowlisted taxonomy)
 - Cache tools (valid target, invalid target, disallowed target, confirmation flow, confirmation with valid token)
-- Capabilities endpoint (structure, tool listing, enabled status, target types)
+- Asset tools (upload, list, get, delete, move with container authorization)
+- Blueprint tools (get, create, update, delete with resource-type delegation)
+- Form tools (get, list, submissions)
+- User tools (list, get, create, update, delete with toggle gating)
+- Custom commands (execute, unknown alias, discovery endpoint)
+- Capabilities endpoint (structure, tool listing, enabled status, target types, all 41 tools present)
+- Settings controller (validation rules, resources endpoint with asset containers and forms)
 - Audit logging (succeeded, failed, rejected events)
 
 ### Running Tests
@@ -1047,7 +1416,7 @@ This addon is intentionally restrictive. It may not be the right fit if you want
 
 ## Minimal Setup Example
 
-For a site that needs AI-managed content in `pages` and `projects`, with cache clearing:
+For a site that needs AI-managed content in `pages` and `projects`, with asset management and cache clearing:
 
 **.env:**
 ```env
@@ -1055,12 +1424,19 @@ AI_GATEWAY_ENABLED=true
 AI_GATEWAY_TOKEN=sk_live_a1b2c3d4e5f6g7h8i9j0
 
 AI_GATEWAY_TOOL_ENTRY_UPSERT=true
+AI_GATEWAY_TOOL_ENTRY_SEARCH=true
+AI_GATEWAY_TOOL_ASSET_UPLOAD=true
+AI_GATEWAY_TOOL_ASSET_LIST=true
+AI_GATEWAY_TOOL_BLUEPRINT_GET=true
+AI_GATEWAY_TOOL_COLLECTION_LIST=true
 AI_GATEWAY_TOOL_CACHE_CLEAR=true
+AI_GATEWAY_TOOL_SYSTEM_INFO=true
 ```
 
 **config/ai_gateway.php** (published):
 ```php
 'allowed_collections' => ['pages', 'projects'],
+'allowed_asset_containers' => ['assets'],
 'allowed_cache_targets' => ['stache', 'static'],
 
 'denied_fields' => [
@@ -1068,7 +1444,7 @@ AI_GATEWAY_TOOL_CACHE_CLEAR=true
 ],
 ```
 
-Two tools, two collections, two cache targets, two denied fields. Everything else stays locked down.
+Eight tools, two collections, one asset container, two cache targets, two denied fields. Everything else stays locked down.
 
 ---
 
@@ -1187,11 +1563,11 @@ If you get `401`, check the token. If you get `404`, the addon isn't enabled. If
 
 The architecture is designed to grow safely over time. Potential future capabilities include:
 
-- Controlled execution of whitelisted Artisan commands
-- Read/query tools for content inspection
 - Dry-run and "explain" modes for safer planning
 - More advanced audit and observability features
 - Deeper integration with custom application logic
+- Webhook notifications for tool executions
+- Role-based access control with multiple tokens
 
 All while maintaining the same core principle:
 
