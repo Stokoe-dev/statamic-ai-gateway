@@ -17,6 +17,15 @@ const dirty = ref(false);
 const saving = ref(false);
 const tokenRevealed = ref(false);
 const loadingResources = ref(true);
+const activeTab = ref('general');
+
+const tabs = [
+    { id: 'general', label: 'General' },
+    { id: 'tools', label: 'Tools & Permissions' },
+    { id: 'commands', label: 'Custom Commands' },
+    { id: 'security', label: 'Security' },
+    { id: 'audit', label: 'Audit' },
+];
 
 const availableResources = reactive({
     collections: [],
@@ -105,7 +114,6 @@ const confirmationTools = [
     { label: 'stache.warm', group: 'stache', action: 'warm' },
     { label: 'static.warm', group: 'static', action: 'warm' },
 ];
-
 
 const tagInputs = reactive({
     'denied_fields.entry': '',
@@ -255,7 +263,6 @@ async function fetchResources() {
     }
 }
 
-
 async function save() {
     saving.value = true;
     const payload = JSON.parse(JSON.stringify(form));
@@ -312,7 +319,6 @@ onMounted(() => {
 onBeforeUnmount(() => { window.removeEventListener('beforeunload', beforeUnload); });
 </script>
 
-
 <template>
     <div>
         <Header title="AI Gateway">
@@ -323,308 +329,352 @@ onBeforeUnmount(() => { window.removeEventListener('beforeunload', beforeUnload)
             </template>
         </Header>
 
-        <div class="max-w-3xl mx-auto mt-6 space-y-6">
+        <div class="max-w-3xl mx-auto mt-6">
 
-            <!-- General -->
-            <Panel>
-                <PanelHeader>General</PanelHeader>
-                <div class="p-4 space-y-4">
-                    <Checkbox v-model="form.enabled" label="Enable AI Gateway" @update:model-value="markDirty" />
+            <!-- Tab Navigation -->
+            <div class="flex border-b border-gray-200 dark:border-gray-700 mb-6">
+                <button
+                    v-for="tab in tabs"
+                    :key="tab.id"
+                    type="button"
+                    @click="activeTab = tab.id"
+                    class="px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors"
+                    :class="activeTab === tab.id
+                        ? 'border-blue-500 text-blue-600 dark:text-blue-400'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'"
+                >
+                    {{ tab.label }}
+                </button>
+            </div>
 
-                    <Field label="Bearer Token">
-                        <div class="flex items-center gap-2">
-                            <div class="flex-1">
-                                <Input v-model="form.token" @update:model-value="markDirty" placeholder="Bearer token" />
+            <!-- ==================== GENERAL TAB ==================== -->
+            <div v-show="activeTab === 'general'" class="space-y-6">
+
+                <Panel>
+                    <PanelHeader>Gateway</PanelHeader>
+                    <div class="p-4 space-y-4">
+                        <Checkbox v-model="form.enabled" label="Enable AI Gateway" @update:model-value="markDirty" />
+
+                        <Field label="Bearer Token">
+                            <div class="flex items-center gap-2">
+                                <div class="flex-1">
+                                    <Input v-model="form.token" @update:model-value="markDirty" placeholder="Bearer token" />
+                                </div>
+                                <Button size="sm" @click="toggleReveal">{{ tokenRevealed ? 'Hide' : 'Reveal' }}</Button>
+                                <Button size="sm" @click="generateToken">Generate</Button>
                             </div>
-                            <Button size="sm" @click="toggleReveal">{{ tokenRevealed ? 'Hide' : 'Reveal' }}</Button>
-                            <Button size="sm" @click="generateToken">Generate</Button>
-                        </div>
-                    </Field>
-                </div>
-            </Panel>
-
-            <!-- Rate Limits -->
-            <Panel>
-                <PanelHeader>Rate Limits</PanelHeader>
-                <div class="p-4 grid grid-cols-2 gap-4">
-                    <Field label="Execute (requests/min)">
-                        <Input type="number" v-model="form.rate_limits.execute" @update:model-value="markDirty" :min="1" />
-                    </Field>
-                    <Field label="Capabilities (requests/min)">
-                        <Input type="number" v-model="form.rate_limits.capabilities" @update:model-value="markDirty" :min="1" />
-                    </Field>
-                </div>
-            </Panel>
-
-            <!-- Request Limits -->
-            <Panel>
-                <PanelHeader>Request Limits</PanelHeader>
-                <div class="p-4">
-                    <Field label="Max Request Size (bytes)">
-                        <Input type="number" v-model="form.max_request_size" @update:model-value="markDirty" :min="1024" />
-                    </Field>
-                </div>
-            </Panel>
-
-            <!-- Tools -->
-            <Panel>
-                <PanelHeader>Tools</PanelHeader>
-                <div class="p-4 space-y-4">
-                    <div v-for="(actions, group) in toolGroups" :key="group">
-                        <Subheading>{{ group }}</Subheading>
-                        <div class="mt-2 space-y-1.5">
-                            <Checkbox
-                                v-for="action in actions"
-                                :key="`${group}.${action}`"
-                                v-model="form.tools[group][action]"
-                                :label="`${group}.${action}`"
-                                @update:model-value="markDirty"
-                            />
-                        </div>
-                    </div>
-                </div>
-            </Panel>
-
-            <!-- Allowlists -->
-            <Panel>
-                <PanelHeader>Allowlists</PanelHeader>
-                <div class="p-4 space-y-5">
-
-                    <Field label="Collections">
-                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
-                        <div v-else-if="availableResources.collections.length === 0" class="text-sm text-gray-400">No collections found.</div>
-                        <div v-else class="space-y-1.5">
-                            <Checkbox
-                                v-for="item in availableResources.collections"
-                                :key="item.handle"
-                                :model-value="form.allowed_collections.includes(item.handle)"
-                                :label="`${item.title} (${item.handle})`"
-                                @update:model-value="toggleAllowlistItem('allowed_collections', item.handle)"
-                            />
-                        </div>
-                    </Field>
-
-                    <Field label="Globals">
-                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
-                        <div v-else-if="availableResources.globals.length === 0" class="text-sm text-gray-400">No global sets found.</div>
-                        <div v-else class="space-y-1.5">
-                            <Checkbox
-                                v-for="item in availableResources.globals"
-                                :key="item.handle"
-                                :model-value="form.allowed_globals.includes(item.handle)"
-                                :label="`${item.title} (${item.handle})`"
-                                @update:model-value="toggleAllowlistItem('allowed_globals', item.handle)"
-                            />
-                        </div>
-                    </Field>
-
-                    <Field label="Navigations">
-                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
-                        <div v-else-if="availableResources.navigations.length === 0" class="text-sm text-gray-400">No navigations found.</div>
-                        <div v-else class="space-y-1.5">
-                            <Checkbox
-                                v-for="item in availableResources.navigations"
-                                :key="item.handle"
-                                :model-value="form.allowed_navigations.includes(item.handle)"
-                                :label="`${item.title} (${item.handle})`"
-                                @update:model-value="toggleAllowlistItem('allowed_navigations', item.handle)"
-                            />
-                        </div>
-                    </Field>
-
-                    <Field label="Taxonomies">
-                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
-                        <div v-else-if="availableResources.taxonomies.length === 0" class="text-sm text-gray-400">No taxonomies found.</div>
-                        <div v-else class="space-y-1.5">
-                            <Checkbox
-                                v-for="item in availableResources.taxonomies"
-                                :key="item.handle"
-                                :model-value="form.allowed_taxonomies.includes(item.handle)"
-                                :label="`${item.title} (${item.handle})`"
-                                @update:model-value="toggleAllowlistItem('allowed_taxonomies', item.handle)"
-                            />
-                        </div>
-                    </Field>
-
-                    <Field label="Asset Containers">
-                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
-                        <div v-else-if="availableResources.asset_containers.length === 0" class="text-sm text-gray-400">No asset containers found.</div>
-                        <div v-else class="space-y-1.5">
-                            <Checkbox
-                                v-for="item in availableResources.asset_containers"
-                                :key="item.handle"
-                                :model-value="form.allowed_asset_containers.includes(item.handle)"
-                                :label="`${item.title} (${item.handle})`"
-                                @update:model-value="toggleAllowlistItem('allowed_asset_containers', item.handle)"
-                            />
-                        </div>
-                    </Field>
-
-                    <Field label="Forms">
-                        <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
-                        <div v-else-if="availableResources.forms.length === 0" class="text-sm text-gray-400">No forms found.</div>
-                        <div v-else class="space-y-1.5">
-                            <Checkbox
-                                v-for="item in availableResources.forms"
-                                :key="item.handle"
-                                :model-value="form.allowed_forms.includes(item.handle)"
-                                :label="`${item.title} (${item.handle})`"
-                                @update:model-value="toggleAllowlistItem('allowed_forms', item.handle)"
-                            />
-                        </div>
-                    </Field>
-
-                    <Field label="Cache Targets">
-                        <div class="space-y-1.5">
-                            <Checkbox
-                                v-for="target in cacheTargetOptions"
-                                :key="target"
-                                :model-value="form.allowed_cache_targets.includes(target)"
-                                :label="target"
-                                @update:model-value="toggleCacheTarget(target)"
-                            />
-                        </div>
-                    </Field>
-                </div>
-            </Panel>
-
-            <!-- User Management -->
-            <Panel>
-                <PanelHeader>User Management</PanelHeader>
-                <div class="p-4 space-y-4">
-                    <Checkbox v-model="form.allowed_user_operations" label="Enable user management operations" @update:model-value="markDirty" />
-                    <p class="text-sm text-gray-500">When enabled, user tools (list, get, create, update, delete) are permitted. When disabled, all user tools are blocked.</p>
-                </div>
-            </Panel>
-
-            <!-- Asset Upload Settings -->
-            <Panel>
-                <PanelHeader>Asset Upload Settings</PanelHeader>
-                <div class="p-4 space-y-4">
-                    <Field label="Max Asset Size (bytes)">
-                        <Input type="number" v-model="form.max_asset_size" @update:model-value="markDirty" :min="1" />
-                    </Field>
-
-                    <Field label="Allowed Asset Extensions">
-                        <div class="flex items-center gap-2 mb-2">
-                            <div class="flex-1">
-                                <Input v-model="tagInputs['asset_extensions']"
-                                    @keydown.enter.prevent="addTag('asset_extensions')"
-                                    placeholder="Add extension (e.g. jpg)..." />
-                            </div>
-                            <Button size="sm" @click="addTag('asset_extensions')">Add</Button>
-                        </div>
-                        <div class="flex flex-wrap gap-1.5">
-                            <span v-for="(item, i) in getTagList('asset_extensions')" :key="i"
-                                class="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-full px-3 py-1">
-                                {{ item }}
-                                <button type="button" @click="removeTag('asset_extensions', i)"
-                                    class="text-gray-400 hover:text-red-500 ml-1">&times;</button>
-                            </span>
-                        </div>
-                    </Field>
-                </div>
-            </Panel>
-
-            <!-- Custom Commands -->
-            <Panel>
-                <PanelHeader>Custom Commands</PanelHeader>
-                <div class="p-4 space-y-4">
-                    <p class="text-sm text-gray-500">Define custom artisan commands that AI agents can execute through the Gateway.</p>
-
-                    <div v-for="(cmd, index) in form.custom_commands" :key="index"
-                        class="border rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800">
-                        <div class="flex items-center justify-between">
-                            <span class="font-medium text-sm">Command {{ index + 1 }}</span>
-                            <Button size="sm" variant="danger" @click="removeCustomCommand(index)">Remove</Button>
-                        </div>
-                        <Field label="Alias (kebab-case)">
-                            <Input v-model="cmd.alias" @update:model-value="markDirty" placeholder="e.g. rebuild-search" />
-                        </Field>
-                        <Field label="Description">
-                            <Input v-model="cmd.description" @update:model-value="markDirty" placeholder="Human-readable description" />
-                        </Field>
-                        <Field label="Artisan Command">
-                            <Input v-model="cmd.command" @update:model-value="markDirty" placeholder="e.g. statamic:search:update --all" />
-                        </Field>
-                        <Field label="Confirmation Environments">
-                            <Input
-                                :model-value="getCommandConfirmEnvs(index)"
-                                @update:model-value="setCommandConfirmEnvs(index, $event)"
-                                placeholder="e.g. production, staging" />
                         </Field>
                     </div>
+                </Panel>
 
-                    <Button size="sm" @click="addCustomCommand">Add Command</Button>
-                </div>
-            </Panel>
+                <Panel>
+                    <PanelHeader>Rate Limits</PanelHeader>
+                    <div class="p-4 grid grid-cols-2 gap-4">
+                        <Field label="Execute (requests/min)">
+                            <Input type="number" v-model="form.rate_limits.execute" @update:model-value="markDirty" :min="1" />
+                        </Field>
+                        <Field label="Capabilities (requests/min)">
+                            <Input type="number" v-model="form.rate_limits.capabilities" @update:model-value="markDirty" :min="1" />
+                        </Field>
+                    </div>
+                </Panel>
 
-            <!-- Field Deny Lists -->
-            <Panel>
-                <PanelHeader>Field Deny Lists</PanelHeader>
-                <div class="p-4 space-y-5">
-                    <div v-for="(label, key) in {
-                        'denied_fields.entry': 'Entry',
-                        'denied_fields.global': 'Global',
-                        'denied_fields.term': 'Term',
-                    }" :key="key">
-                        <Field :label="label">
+                <Panel>
+                    <PanelHeader>Request Limits</PanelHeader>
+                    <div class="p-4">
+                        <Field label="Max Request Size (bytes)">
+                            <Input type="number" v-model="form.max_request_size" @update:model-value="markDirty" :min="1024" />
+                        </Field>
+                    </div>
+                </Panel>
+
+            </div>
+
+            <!-- ==================== TOOLS & PERMISSIONS TAB ==================== -->
+            <div v-show="activeTab === 'tools'" class="space-y-6">
+
+                <Panel>
+                    <PanelHeader>Tool Toggles</PanelHeader>
+                    <div class="p-4 space-y-4">
+                        <div v-for="(actions, group) in toolGroups" :key="group">
+                            <Subheading>{{ group }}</Subheading>
+                            <div class="mt-2 space-y-1.5">
+                                <Checkbox
+                                    v-for="action in actions"
+                                    :key="`${group}.${action}`"
+                                    v-model="form.tools[group][action]"
+                                    :label="`${group}.${action}`"
+                                    @update:model-value="markDirty"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                </Panel>
+
+                <Panel>
+                    <PanelHeader>Allowlists</PanelHeader>
+                    <div class="p-4 space-y-5">
+
+                        <Field label="Collections">
+                            <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                            <div v-else-if="availableResources.collections.length === 0" class="text-sm text-gray-400">No collections found.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="item in availableResources.collections"
+                                    :key="item.handle"
+                                    :model-value="form.allowed_collections.includes(item.handle)"
+                                    :label="`${item.title} (${item.handle})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_collections', item.handle)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Globals">
+                            <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                            <div v-else-if="availableResources.globals.length === 0" class="text-sm text-gray-400">No global sets found.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="item in availableResources.globals"
+                                    :key="item.handle"
+                                    :model-value="form.allowed_globals.includes(item.handle)"
+                                    :label="`${item.title} (${item.handle})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_globals', item.handle)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Navigations">
+                            <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                            <div v-else-if="availableResources.navigations.length === 0" class="text-sm text-gray-400">No navigations found.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="item in availableResources.navigations"
+                                    :key="item.handle"
+                                    :model-value="form.allowed_navigations.includes(item.handle)"
+                                    :label="`${item.title} (${item.handle})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_navigations', item.handle)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Taxonomies">
+                            <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                            <div v-else-if="availableResources.taxonomies.length === 0" class="text-sm text-gray-400">No taxonomies found.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="item in availableResources.taxonomies"
+                                    :key="item.handle"
+                                    :model-value="form.allowed_taxonomies.includes(item.handle)"
+                                    :label="`${item.title} (${item.handle})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_taxonomies', item.handle)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Asset Containers">
+                            <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                            <div v-else-if="availableResources.asset_containers.length === 0" class="text-sm text-gray-400">No asset containers found.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="item in availableResources.asset_containers"
+                                    :key="item.handle"
+                                    :model-value="form.allowed_asset_containers.includes(item.handle)"
+                                    :label="`${item.title} (${item.handle})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_asset_containers', item.handle)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Forms">
+                            <div v-if="loadingResources" class="text-sm text-gray-400">Loading...</div>
+                            <div v-else-if="availableResources.forms.length === 0" class="text-sm text-gray-400">No forms found.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="item in availableResources.forms"
+                                    :key="item.handle"
+                                    :model-value="form.allowed_forms.includes(item.handle)"
+                                    :label="`${item.title} (${item.handle})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_forms', item.handle)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Custom Commands">
+                            <div v-if="form.custom_commands.length === 0" class="text-sm text-gray-400">No custom commands defined. Add commands in the Custom Commands tab.</div>
+                            <div v-else class="space-y-1.5">
+                                <Checkbox
+                                    v-for="cmd in form.custom_commands.filter(c => c.alias)"
+                                    :key="cmd.alias"
+                                    :model-value="form.allowed_custom_commands.includes(cmd.alias)"
+                                    :label="`${cmd.description || cmd.alias} (${cmd.alias})`"
+                                    @update:model-value="toggleAllowlistItem('allowed_custom_commands', cmd.alias)"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Cache Targets">
+                            <div class="space-y-1.5">
+                                <Checkbox
+                                    v-for="target in cacheTargetOptions"
+                                    :key="target"
+                                    :model-value="form.allowed_cache_targets.includes(target)"
+                                    :label="target"
+                                    @update:model-value="toggleCacheTarget(target)"
+                                />
+                            </div>
+                        </Field>
+                    </div>
+                </Panel>
+
+                <Panel>
+                    <PanelHeader>User Management</PanelHeader>
+                    <div class="p-4 space-y-4">
+                        <Checkbox v-model="form.allowed_user_operations" label="Enable user management operations" @update:model-value="markDirty" />
+                        <p class="text-sm text-gray-500">When enabled, user tools (list, get, create, update, delete) are permitted. When disabled, all user tools are blocked.</p>
+                    </div>
+                </Panel>
+
+                <Panel>
+                    <PanelHeader>Asset Upload Settings</PanelHeader>
+                    <div class="p-4 space-y-4">
+                        <Field label="Max Asset Size (bytes)">
+                            <Input type="number" v-model="form.max_asset_size" @update:model-value="markDirty" :min="1" />
+                        </Field>
+
+                        <Field label="Allowed Asset Extensions">
                             <div class="flex items-center gap-2 mb-2">
                                 <div class="flex-1">
-                                    <Input v-model="tagInputs[key]"
-                                        @keydown.enter.prevent="addTag(key)"
-                                        placeholder="Add field name..." />
+                                    <Input v-model="tagInputs['asset_extensions']"
+                                        @keydown.enter.prevent="addTag('asset_extensions')"
+                                        placeholder="Add extension (e.g. jpg)..." />
                                 </div>
-                                <Button size="sm" @click="addTag(key)">Add</Button>
+                                <Button size="sm" @click="addTag('asset_extensions')">Add</Button>
                             </div>
                             <div class="flex flex-wrap gap-1.5">
-                                <span v-for="(item, i) in getTagList(key)" :key="i"
+                                <span v-for="(item, i) in getTagList('asset_extensions')" :key="i"
                                     class="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-full px-3 py-1">
                                     {{ item }}
-                                    <button type="button" @click="removeTag(key, i)"
+                                    <button type="button" @click="removeTag('asset_extensions', i)"
                                         class="text-gray-400 hover:text-red-500 ml-1">&times;</button>
                                 </span>
                             </div>
                         </Field>
                     </div>
-                </div>
-            </Panel>
+                </Panel>
 
-            <!-- Confirmation Flow -->
-            <Panel>
-                <PanelHeader>Confirmation Flow</PanelHeader>
-                <div class="p-4 space-y-4">
-                    <Field label="Token TTL (seconds)">
-                        <Input type="number" v-model="form.confirmation.ttl" @update:model-value="markDirty" :min="1" />
-                    </Field>
+                <Panel>
+                    <PanelHeader>Field Deny Lists</PanelHeader>
+                    <div class="p-4 space-y-5">
+                        <div v-for="(label, key) in {
+                            'denied_fields.entry': 'Entry',
+                            'denied_fields.global': 'Global',
+                            'denied_fields.term': 'Term',
+                        }" :key="key">
+                            <Field :label="label">
+                                <div class="flex items-center gap-2 mb-2">
+                                    <div class="flex-1">
+                                        <Input v-model="tagInputs[key]"
+                                            @keydown.enter.prevent="addTag(key)"
+                                            placeholder="Add field name..." />
+                                    </div>
+                                    <Button size="sm" @click="addTag(key)">Add</Button>
+                                </div>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <span v-for="(item, i) in getTagList(key)" :key="i"
+                                        class="inline-flex items-center gap-1 bg-gray-200 dark:bg-gray-700 text-sm rounded-full px-3 py-1">
+                                        {{ item }}
+                                        <button type="button" @click="removeTag(key, i)"
+                                            class="text-gray-400 hover:text-red-500 ml-1">&times;</button>
+                                    </span>
+                                </div>
+                            </Field>
+                        </div>
+                    </div>
+                </Panel>
 
-                    <Field label="Per-Tool Environment Rules">
-                        <p class="text-sm text-gray-500 mb-3">Comma-separate environments that require confirmation.</p>
-                        <div class="space-y-2">
-                            <div v-for="tool in confirmationTools" :key="tool.label"
-                                class="flex items-center gap-3">
-                                <span class="w-40 font-mono text-sm text-gray-600 dark:text-gray-400">{{ tool.label }}</span>
-                                <div class="flex-1">
-                                    <Input
-                                        :model-value="getConfirmationEnvs(tool.group, tool.action)"
-                                        @update:model-value="setConfirmationEnvs(tool.group, tool.action, $event)"
-                                        placeholder="e.g. production, staging" />
+            </div>
+
+            <!-- ==================== CUSTOM COMMANDS TAB ==================== -->
+            <div v-show="activeTab === 'commands'" class="space-y-6">
+
+                <Panel>
+                    <PanelHeader>Custom Commands</PanelHeader>
+                    <div class="p-4 space-y-4">
+                        <p class="text-sm text-gray-500">Define custom artisan commands that AI agents can execute through the Gateway. Commands must also be allowlisted in the Tools &amp; Permissions tab to be executable.</p>
+
+                        <div v-for="(cmd, index) in form.custom_commands" :key="index"
+                            class="border rounded-lg p-4 space-y-3 bg-gray-50 dark:bg-gray-800">
+                            <div class="flex items-center justify-between">
+                                <span class="font-medium text-sm">Command {{ index + 1 }}</span>
+                                <Button size="sm" variant="danger" @click="removeCustomCommand(index)">Remove</Button>
+                            </div>
+                            <Field label="Alias (kebab-case)">
+                                <Input v-model="cmd.alias" @update:model-value="markDirty" placeholder="e.g. rebuild-search" />
+                            </Field>
+                            <Field label="Description">
+                                <Input v-model="cmd.description" @update:model-value="markDirty" placeholder="Human-readable description" />
+                            </Field>
+                            <Field label="Artisan Command">
+                                <Input v-model="cmd.command" @update:model-value="markDirty" placeholder="e.g. statamic:search:update --all" />
+                            </Field>
+                            <Field label="Confirmation Environments">
+                                <Input
+                                    :model-value="getCommandConfirmEnvs(index)"
+                                    @update:model-value="setCommandConfirmEnvs(index, $event)"
+                                    placeholder="e.g. production, staging" />
+                            </Field>
+                        </div>
+
+                        <Button size="sm" @click="addCustomCommand">Add Command</Button>
+                    </div>
+                </Panel>
+
+            </div>
+
+            <!-- ==================== SECURITY TAB ==================== -->
+            <div v-show="activeTab === 'security'" class="space-y-6">
+
+                <Panel>
+                    <PanelHeader>Confirmation Flow</PanelHeader>
+                    <div class="p-4 space-y-4">
+                        <Field label="Token TTL (seconds)">
+                            <Input type="number" v-model="form.confirmation.ttl" @update:model-value="markDirty" :min="1" />
+                        </Field>
+
+                        <Field label="Per-Tool Environment Rules">
+                            <p class="text-sm text-gray-500 mb-3">Comma-separate environments that require confirmation before execution.</p>
+                            <div class="space-y-2">
+                                <div v-for="tool in confirmationTools" :key="tool.label"
+                                    class="flex items-center gap-3">
+                                    <span class="w-44 font-mono text-sm text-gray-600 dark:text-gray-400">{{ tool.label }}</span>
+                                    <div class="flex-1">
+                                        <Input
+                                            :model-value="getConfirmationEnvs(tool.group, tool.action)"
+                                            @update:model-value="setConfirmationEnvs(tool.group, tool.action, $event)"
+                                            placeholder="e.g. production, staging" />
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                    </Field>
-                </div>
-            </Panel>
+                        </Field>
+                    </div>
+                </Panel>
 
-            <!-- Audit -->
-            <Panel>
-                <PanelHeader>Audit</PanelHeader>
-                <div class="p-4">
-                    <Field label="Log Channel">
-                        <Select v-model="form.audit.channel" :options="logChannelOptions" @update:model-value="markDirty" />
-                    </Field>
-                </div>
-            </Panel>
+            </div>
+
+            <!-- ==================== AUDIT TAB ==================== -->
+            <div v-show="activeTab === 'audit'" class="space-y-6">
+
+                <Panel>
+                    <PanelHeader>Audit Logging</PanelHeader>
+                    <div class="p-4">
+                        <Field label="Log Channel">
+                            <Select v-model="form.audit.channel" :options="logChannelOptions" @update:model-value="markDirty" />
+                        </Field>
+                        <p class="text-sm text-gray-500 mt-3">Every tool execution is logged with request ID, tool name, status, duration, and target info. Select a channel or leave as Default to use your application's default log channel.</p>
+                    </div>
+                </Panel>
+
+            </div>
 
         </div>
     </div>
